@@ -41,7 +41,7 @@ The different dashboards have different visualizations, different variables and 
 
 #### Listing logs
 
-Our setup has a client and a server, named `mythical-requester` and `mythical-server`. We'll start by looking at the server-side logs in the [Explore window](http://localhost:3000/explore). The Explore window is nice to use to explore data - you can send share links that contain "everything" (data sources, time ranges, etc), but the visualization features are limited.
+Our setup has a client and a server, named `mythical-requester` and `mythical-server`. We'll start by looking at the server-side logs in the [Explore window](http://localhost:3000/explore). The Explore window is nice to use to explore data - you can send shared links that contain "everything" (data sources, time ranges, etc), but the visualization features are limited.
 
 * Make sure Loki is selected as a data source in the top-right corner.
 * Using the "Builder" feature is usually easier, but try to look at the generated code too.
@@ -54,21 +54,31 @@ Here are some steps to get you started exploring the logs:
 
 3. Explore is nice, but having it on a dashboard is nicer. Use explore to create a query showing only error logs, then click "+ Add" in the top-right menu to add it to a new dashboard. Give the newly created panel (visualization) a name, and save the dashboard.
 
-Logs by themselves are nice, but showing numbers and stats are usually easier to work with. We'll try to create panel showing panels using the [RED method](https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/): rate, errors, duration.
+Logs by themselves are nice, but showing numbers and stats are usually easier to work with. We'll try to create a dashboard showing panels using the [RED method](https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/): rate, errors, duration.
 
 * `count_over_time` is a good way to turn logs into workable numbers.
 * `sum by(http_method) (count_over_time({service_name="mythical-server"} | logfmt [10s]))` shows the number of calls per HTTP method.
 * Use it as a starting point to create panels showing the rate of requests over time and the number of errors.
 * Try using different visualizations: stat, time chart and gauge are often used.
 * Take a look at the pre-made MTL dashboard if you need inspiration (note however, that it doesn't use logs).
-* Duration is not available server side, but you is available in the client side logs (`service_name="mythical-requester"`).
+* Duration is not available server side, but is available in the client side logs (`service_name="mythical-requester"`).
 
 If you have a large number of logs, or want to do more complex calculations (e.g., 99% percentile), metrics is usually the way to go. Logs are expensive to store, parse and visualize, but are very useful when trying to pin-point errors.
 
 ### Task 3: Metrics with Mimir and PromQL
 
-TODO: Which metrics, labels are a good starting point
+Metrics are useful for aggregating information about your system(s). Metrics will typically be used to observe the general state of your system, and therefore necessitates a highly scalable and performant, long-term storage service, such as Grafana's Mimir, which is compatible with Prometheus.
+
+Navigate to the explore window and select Mimir as data source. In the "Builder" window, take a look at the available metrics through the "Metric" dropdown. In addition to using the default metrics created by Grafana, it is often relevant to create custom metrics monitoring what's interesting for your system specifically.
+
+
+TODO: Which metrics, labels and operations are a good starting point
 TODO: How to do RED visualizations
+
+#### Metrics with exemplars
+Although metrics are useful for observing your system at a glance, it can be difficult to pinpoint which factors are contributing to e.g. latency or unexpected traffic between parts of your system. As you may have observed in your own or the premade dashboard panels, Grafana can display so-called "exemplars" – indicated by a highlighted star – alongside metrics.
+
+These exemplars link to a "trace" instance, which we will explore further in the following task, and can be used to bridge metrics and traces. This is useful for identifying factors contributing to latency in a production-environment with vast amounts of data. 
 
 ### Task 4: Tracing with Tempo and TraceQL
 
