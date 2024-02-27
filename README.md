@@ -70,6 +70,7 @@ If you have a large number of logs, or want to do more complex calculations (e.g
 Metrics are useful for aggregating information about your system(s). Metrics will typically be used to observe the general state of your system, and therefore necessitates a highly scalable and performant, long-term storage service, such as Grafana's Mimir, which is compatible with Prometheus.
 
 #### Explore Mimir
+
 * Navigate to the explore window and select Mimir as data source.
 * In the "Builder" window, take a look at the available metrics through the "Metric" dropdown. It might be easier to search for metrics through the "Metrics explorer", which should be the first option in the dropdown list.
 * In addition to using the default metrics created by Grafana, it is often relevant to create custom metrics monitoring interesting parts of your system specifically. Try to locate some domain-specific metrics for our mythical beast application.
@@ -81,53 +82,101 @@ Metrics are useful for aggregating information about your system(s). Metrics wil
 
 
 #### Create a RED dashboard using metrics
+
 Metrics are better suited for monitoring the rate, errors and duration of your services over time.
+
 * Create panels for the rate and errors of requests. Add additional groupings as you see fit.
-  
+
   <details>
   <summary>Hint – rate and errors</summary>
-  
+
   To monitor request rate through metrics, the `mythical_request_times_count` is useful, together with `sum` and `rate`.
 
   For errors, it is also necessary to group the request rate by the status code.
-  
+
   </details>
 
 * Create a panel monitoring the duration of requests. Typically, we allow some anomalies in our data.
   Therefore, try to filter out anomalies, resulting in a panel that only includes a chosen quantile of data as basis for the aggregation.
-  
+
   <details>
   <summary>Hint – duration</summary>
-  
+
   To monitor duration through metrics, the `mythical_request_times_bucket` is relevant, as seen in an earlier task.
-  
+
   To filter out anomalies, a histogram quantile function can be used, where a quantile for example can be set to the 95th percentile.
-  For the histogram to work, it is also necessary to add the label `le`, 
+  For the histogram to work, it is also necessary to add the label `le`,
   which indicates that the result is _less than or equal to_ the desired upper quantile limit.
-  
+
   </details>
 
 #### Metrics with exemplars
+
 Although metrics are useful for observing your system at a glance, it can be difficult to pinpoint which factors are contributing to e.g. latency or unexpected traffic between parts of your system.
 As you may have observed in your own or the pre-made dashboard panels, Grafana can display so-called "exemplars" – indicated by a highlighted star – alongside metrics.
 
 These exemplars link to a "trace" instance, which we will explore further in the following task, and can be used to bridge metrics and traces.
 Exemplars can be useful for identifying factors contributing to latency in a production-environment with vast amounts of data.
-If you can't see any exemplars in your own dashboards, you can explore [this example](http://localhost:3000/explore?left=%7B%22datasource%22:%22mimir%22,%22queries%22:%5B%7B%22datasource%22:%7B%22type%22:%22prometheus%22,%22uid%22:%22mimir%22%7D,%22exemplar%22:true,%22expr%22:%22histogram_quantile%280.95,%20sum%28rate%28mythical_request_times_bucket%5B15s%5D%29%29%20by%20%28le,%20beast%29%29%22,%22interval%22:%22%22,%22refId%22:%22A%22%7D%5D,%22range%22:%7B%22from%22:%22now-5m%22,%22to%22:%22now%22%7D%7D&orgId=1). 
+If you can't see any exemplars in your own dashboards, you can explore [this example](http://localhost:3000/explore?left=%7B%22datasource%22:%22mimir%22,%22queries%22:%5B%7B%22datasource%22:%7B%22type%22:%22prometheus%22,%22uid%22:%22mimir%22%7D,%22exemplar%22:true,%22expr%22:%22histogram_quantile%280.95,%20sum%28rate%28mythical_request_times_bucket%5B15s%5D%29%29%20by%20%28le,%20beast%29%29%22,%22interval%22:%22%22,%22refId%22:%22A%22%7D%5D,%22range%22:%7B%22from%22:%22now-5m%22,%22to%22:%22now%22%7D%7D&orgId=1).
 
 ### Task 4: Tracing with Tempo and TraceQL
 
-TODO: Metrics to tracing with exemplars
-TODO: Logs to metrics with span/trace ids
-TODO: TraceQL for long duration calls, errors and deep chains
+Tracing is an unique tool for debugging errors and performance in distributed systems. Metrics do not contain sufficient information about who calls who to debug. Logs can do this using a correlation id that is forwarded and logged in all messages in all systems. However, for visualizing the call tree is hard, and so is figuring it what service call causes issues. Tracing can (depending on configuration) present a full service call graph, HTTP methods between services, SQL queries and more along with durations, error status and other metadata. Tempo is the tracing backend in the LGTM-stack.
+
+#### Metrics to tracing with exemplars
+
+Start with the examplars from the previous task, select one and look at the new explore window. Select an exemplar for one of the slower requests, and click the "Query with Tempo" button.
+
+In the right side view you will get the following:
+* The Tempo search (using the traceID associated with the exemplar)
+* An expandable service call node graph (if configured)
+* The "trace", a service call (waterfall) graph in the duration of each span, the critical path and some other metadata for each span.
+
+Figure out what the slowest parts of the request was. Also, find the SQL statements run when connecting to the DB, the status code returned from the server and call to the loki instance.
+
+#### Logs to traces with trace IDs
+
+Logs can also be used to find corresponding traces. From the [Explore window](http://localhost:3000/explore), use Loki to search for logs with `level="error"`. Click an error message to expand it, and click the "Tempo" button.
+
+* Explore the data. Look at available metadata including SQL queries and HTTP routes.
+* Figure out the cause of the error.
+
+#### TraceQL
+
+Instead of using logs or metric queries, let's write our own queries. Like for PromQL and LogQL, TraceQL has a GUI that you can use - take a look at the generated queries too.
+
+Try this out:
+* Find a trace with status error for the `mythical-server` service.
+* Find a trace that lasted longer than 4 seconds
+* Find a trace with a database insert that lasted longer that 1 second
+
+Here are some more complicated things to try out, where you'll have to write the query by hand (refer to the [docs](https://grafana.com/docs/tempo/latest/traceql/) for help):
+
+* Find traces containing at least 30 spans
+
+    <details>
+    <summary>Hint</summary>
+    Use the [pipeline operator together with `count()`](https://grafana.com/docs/tempo/latest/traceql/#construct-a-traceql-query).
+    </details>
+
+* Find traces containing both a `DELETE` and `POST` request:
+
+    <details>
+    <summary>Hint</summary>
+    Write a query on the form `{...} && {...}`. See the [docs](https://grafana.com/docs/tempo/latest/traceql/#logical) for more info.
+    </details>
 
 ### Extras
 
 #### Dashboard variables
+
+Dashboard variables can be used to filter queries, and is very common if you have a dashboard for multiple similar services.
+
+Modify your existing dashboard using the following steps:
+* Create a dashboard variable for each type of beast. Refer to the [docs](https://grafana.com/docs/grafana/latest/dashboards/variables/add-template-variables/#add-a-query-variable) for creating a query variable. You should use Mimir as a data source and use the label values on the `beast` label on the `mythical_request_times_count` metrics.
+* Add label filters to the log panel and the RED panels. Verify that logs/metrics for only a single beast show up.
+* Bonus: Make sure the [multi-variable and include all options](https://grafana.com/docs/grafana/latest/dashboards/variables/add-template-variables/#configure-variable-selection-options) are set, and make the dashboard work for multiple simulataneously selected beasts.
+
 #### Alerts
-####
 
-## Extras
-
-
-
+Alerts can be configured in the alerting menu. Due to the configuration issues in the current setup, alerting rules cannot be saved. You can however try to create some, and experiment with triggers to see how they work. Go to the [Alerting menu](http://localhost:3000/alerting) to start.
